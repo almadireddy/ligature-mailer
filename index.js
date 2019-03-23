@@ -3,6 +3,8 @@ const bodyParser = require('body-parser')
 const sgMail = require('@sendgrid/mail');
 const expressValidator = require('express-validator')
 const { body } = require('express-validator/check')
+const cors = require('cors')
+const fetch = require('node-fetch');
 
 const app = express();
 sgMail.setApiKey(process.env.SENDGRID);
@@ -23,8 +25,9 @@ const validate = (method) => {
   }
 }
 
+app.options('*', cors())
 
-app.post('*', validate('sendMail'), async (req, res) => {
+app.post('*', cors(), validate('sendMail'), async (req, res) => {
   if (req.body == null) {
     return res.send(400, { error: 'no JSON object in the request' })
   }
@@ -34,31 +37,31 @@ app.post('*', validate('sendMail'), async (req, res) => {
     method: 'POST'
   });
   let response = await score.json();
+  console.log("here 1", req.body.recaptchaScore, response);
 
-  if (emailValid && response.success) {
+  if (response.success) {
     let name = req.body.name.replace(/[^a-z0-9áéíóúñü \.,_-]/gim, "").trim();
     let organization = req.body.organization.replace(/[^a-z0-9áéíóúñü \.,_-]/gim, "").trim();
     let message = req.body.message.replace(/[^a-z0-9áéíóúñü \.,_-]/gim, "").trim();
     let email = req.body.email;
     req.body.name = name;
     req.body.message = message;
-
+    console.log('here 2')
     let msg = {
       to: 'contact@ligature.design',
-      from: `${email}`,
+      from: `website@ligature.design`,
       subject: 'New Contact Form Message!',
-      text: `From: ${name}, Organization: ${organization}`,
-      html: '<strong>This is the text for this message</strong>',
+      text: `From: ${name}, Organization: ${organization}, Email: ${email}\nMessage: ${message}`,
+      html: `<p>From: ${name}<br>Organization: ${organization}<br>Email: ${email}<br>Message: ${message}</p>`
     };
-    sgMail.send(msg);
+    await sgMail.send(msg);
   }
   else {
-    res.send(405, "Invalid Email")
+    res.status(405).send("Captcha did not succeed.")
   }
 
-
   res.set('Content-Type', 'application/json')
-  res.send(200, JSON.stringify(req.body, null, 4))
+  res.status(200).send(JSON.stringify(req.body, null, 4))
 })
 
 app.all('*', (req, res) => {
